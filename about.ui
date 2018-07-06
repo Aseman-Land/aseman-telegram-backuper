@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>About</class>
+ <widget class="QDialog" name="About">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>477</width>
+    <height>305</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>About</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="label">
+     <property name="text">
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;img src=&quot;:/icons/icon.png&quot;/&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;It's a Telegram Backuper application from Aseman Team, you can Download and backup your messages using it.&lt;br/&gt;It's free and open-source and released under the GPLv3 license.&lt;br/&gt;You can download the source code from Github.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="githubBtn">
+     <property name="text">
+      <string>Github</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

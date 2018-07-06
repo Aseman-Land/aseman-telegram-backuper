@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file>tg-server.pub</file>
+        <file>icons/go-previous.png</file>
+        <file>icons/globe.png</file>
+        <file>icons/help-about.png</file>
+        <file>icons/icon.png</file>
+        <file>icons/user-group-new.png</file>
+        <file>icons/im-user.png</file>
+    </qresource>
+</RCC>
