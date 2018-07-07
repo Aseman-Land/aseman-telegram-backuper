@@ -39,6 +39,7 @@ private:
     void initTelegram(const QString &phoneNumber);
     void initProxy();
     void doSendCode(const QString &code);
+    void doCheckPassword(const QString &password);
     void getChannelDetails(const QString &name);
     void downloadMessages(const InputPeer &peer, qint32 offset_id = 0, qint32 offset_date = 0, qint32 offset = 0);
     void downloadMedias(QList<Message> msg, qint32 offset, qint32 count, std::function<void ()> callback);
@@ -58,6 +59,7 @@ private:
     User mUser;
     Chat mChat;
 
+    QString mCurrentSalt;
     qint64 mTotalDownloaded;
     qint32 mLimit;
     QHash<qint64, int> mFilesTimeoutCount;

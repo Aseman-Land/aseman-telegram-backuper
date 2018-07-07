@@ -334,6 +334,9 @@ void MainWindow::on_nextBtn_clicked()
         break;
 
     case 2: // Password
+        mTg->authCheckPassword(ui->passLine->text().toUtf8(), [this](TG_AUTH_CHECK_PASSWORD_CALLBACK){
+            qDebug() << error.errorCode << error.errorText;
+        });
         break;
 
     case 3: // Channel
@@ -380,6 +383,7 @@ void MainWindow::on_downloadBtn_clicked()
         peer.setChannelId(mChat.id());
     }
 
+    mCurrentSalt.clear();
     mTotalDownloaded = 0;
     mLimit = ui->limitSpin->value()? ui->limitSpin->value() : -1;
     mFilesTimeoutCount.clear();
@@ -432,9 +436,47 @@ void MainWindow::doSendCode(const QString &code)
 
     waitLabelShow();
     mTg->authSignIn(code, [this](TG_AUTH_SIGN_IN_CALLBACK){
+        Q_UNUSED(msgId)
+        if(error.errorText == "SESSION_PASSWORD_NEEDED") {
+            mTg->accountGetPassword([this](TG_ACCOUNT_GET_PASSWORD_CALLBACK){
+                Q_UNUSED(msgId)
+                waitLabelHide();
+                if(!error.null) {
+                    QMessageBox::critical(this, "Get password error", error.errorText);
+                    ui->stackedWidget->setCurrentIndex(0);
+                    return;
+                }
+
+                //As a workaround for the binary corruption of the AccountPassword we store it here as a string, thereby guaranteeing deep copy
+                mCurrentSalt = QString(result.currentSalt().toHex());
+                ui->stackedWidget->setCurrentIndex(2);
+            });
+        }
+        else
         if(!error.null) {
+            waitLabelHide();
             QMessageBox::critical(this, "Invalid code", error.errorText);
             ui->stackedWidget->setCurrentIndex(1);
+            return;
+        }
+    });
+}
+
+void MainWindow::doCheckPassword(const QString &password)
+{
+    waitLabelShow();
+    //Reconstructing a byte array with the current salt. A better solution could be made of course
+    const QByteArray salt = QByteArray::fromHex(mCurrentSalt.toUtf8());
+    QByteArray passData = salt + password.toUtf8() + salt;
+
+    //Moved hash calculation here. Either the whole hash is done here or in the lower lib. Splitting makes things hard to analyze & debug
+    mTg->authCheckPassword(QCryptographicHash::hash(passData, QCryptographicHash::Sha256), [this](TG_AUTH_CHECK_PASSWORD_CALLBACK){
+        Q_UNUSED(msgId)
+        Q_UNUSED(result)
+        waitLabelHide();
+        if(!error.null) {
+            QMessageBox::critical(this, "Invalid password", error.errorText);
+            ui->stackedWidget->setCurrentIndex(2);
             return;
         }
     });
