@@ -51,7 +51,7 @@
        <item>
         <widget class="QStackedWidget" name="stackedWidget">
          <property name="currentIndex">
-          <number>5</number>
+          <number>4</number>
          </property>
          <widget class="QWidget" name="page">
           <layout class="QVBoxLayout" name="verticalLayout">
@@ -314,7 +314,7 @@
               </font>
              </property>
              <property name="text">
-              <string>Details:</string>
+              <string>Deta&amp;ils:</string>
              </property>
             </widget>
            </item>
@@ -329,56 +329,58 @@
             </widget>
            </item>
            <item>
-            <layout class="QFormLayout" name="formLayout_2">
-             <property name="bottomMargin">
-              <number>19</number>
-             </property>
-             <item row="0" column="0">
-              <widget class="QCheckBox" name="mediaCheck">
-               <property name="text">
-                <string/>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QLabel" name="label_8">
-               <property name="text">
-                <string>Download Medias</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QCheckBox" name="messagesCheck">
-               <property name="text">
-                <string/>
-               </property>
-               <property name="checked">
-                <bool>true</bool>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="1">
-              <widget class="QLabel" name="label_9">
-               <property name="text">
-                <string>Download Messages</string>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="0">
-              <widget class="QSpinBox" name="limitSpin">
-               <property name="maximum">
-                <number>100000</number>
-               </property>
-              </widget>
-             </item>
-             <item row="2" column="1">
-              <widget class="QLabel" name="label_10">
-               <property name="text">
-                <string>Limit (0 Means unlimit)</string>
-               </property>
-              </widget>
-             </item>
-            </layout>
+            <widget class="QWidget" name="optionsWidget" native="true">
+             <layout class="QFormLayout" name="formLayout_2">
+              <property name="bottomMargin">
+               <number>19</number>
+              </property>
+              <item row="0" column="0">
+               <widget class="QCheckBox" name="mediaCheck">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLabel" name="label_8">
+                <property name="text">
+                 <string>Download &amp;Medias</string>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QCheckBox" name="messagesCheck">
+                <property name="text">
+                 <string/>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLabel" name="label_9">
+                <property name="text">
+                 <string>Dow&amp;nload Messages</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QSpinBox" name="limitSpin">
+                <property name="maximum">
+                 <number>100000</number>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLabel" name="label_10">
+                <property name="text">
+                 <string>Limit (&amp;0 Means unlimit)</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </widget>
            </item>
            <item>
             <spacer name="verticalSpacer_10">

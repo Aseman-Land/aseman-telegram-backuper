@@ -391,7 +391,10 @@ void MainWindow::on_downloadBtn_clicked()
     mDestination.clear();
     ui->sizeLabel->setText("");
 
-    downloadMessages(peer);
+    if(mSticketSet.documents().count())
+        downloadDocuments(mSticketSet.documents());
+    else
+        downloadMessages(peer);
 }
 
 void MainWindow::initTelegram(const QString &phoneNumber)
@@ -492,14 +495,32 @@ void MainWindow::getChannelDetails(const QString &name)
 
     mUser = User::typeUserEmpty;
     mChat = Chat::typeChatEmpty;
+    mSticketSet = MessagesStickerSet();
 
     waitLabelShow();
-    mTg->contactsResolveUsername(name, [this](TG_CONTACTS_RESOLVE_USERNAME_CALLBACK){
+    mTg->contactsResolveUsername(name, [this, name](TG_CONTACTS_RESOLVE_USERNAME_CALLBACK){
         waitLabelHide();
 
         if(!error.null) {
-            QMessageBox::critical(this, "Invalid Channel", error.errorText);
-            ui->stackedWidget->setCurrentIndex(3);
+            // Maybe Its sticker?
+            QString errorText = error.errorText;
+
+            InputStickerSet input;
+            input.setClassType(InputStickerSet::typeInputStickerSetShortName);
+            input.setShortName(name);
+            mTg->messagesGetStickerSet(input, [this, errorText](TG_MESSAGES_GET_STICKER_SET_CALLBACK){
+                if(!error.null) {
+                    // Maybe Its sticker?
+                    QMessageBox::critical(this, "Invalid Channel", errorText);
+                    ui->stackedWidget->setCurrentIndex(3);
+                    return;
+                }
+
+                mSticketSet = result;
+                ui->channelIdLine->setText("Its sticker: " + mSticketSet.set().title());
+                ui->optionsWidget->hide();
+                ui->stackedWidget->setCurrentIndex(4);
+            });
             return;
         }
 
@@ -507,16 +528,19 @@ void MainWindow::getChannelDetails(const QString &name)
         {
             mChat = result.chats().first();
             ui->channelIdLine->setText( mChat.title() + ": " + QString::number(mChat.id()) );
+            ui->optionsWidget->show();
         }
         else
         if(result.users().count())
         {
             mUser = result.users().first();
             ui->channelIdLine->setText( (mUser.firstName() + " " + mUser.lastName()).trimmed() + ": " + QString::number(mUser.id()) );
+            ui->optionsWidget->show();
         }
 
         ui->stackedWidget->setCurrentIndex(4);
     });
+
 }
 
 void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint32 offset_date, qint32 offset)
@@ -752,6 +776,150 @@ void MainWindow::downloadMedias(QList<Message> msgs, qint32 offset, qint32 count
     timer->start();
 
     ui->progressBar->setValue( 1000*(offset - msgs.length()) / count);
+}
+
+void MainWindow::downloadDocuments(QList<Document> docs, qint32 offset)
+{
+    if(docs.isEmpty())
+    {
+        finish();
+        return;
+    }
+
+    if(mDestination.isEmpty())
+    {
+        mDestination = QFileDialog::getExistingDirectory(this, tr("Please enter path to save files"));
+        if(mDestination.isEmpty())
+        {
+            finish();
+            return;
+        }
+    }
+
+    const Document doc = docs.takeFirst();
+
+    qint32 size = doc.size();
+    qint32 dcId = doc.dcId();
+    QString fileName = QString::number(doc.id());
+    InputFileLocation input(InputFileLocation::typeInputFileLocation);
+    input.setClassType(InputFileLocation::typeInputDocumentFileLocation);
+    input.setId(doc.id());
+    input.setAccessHash(doc.accessHash());
+
+    ui->progressLabel->setText( QString("There are %1 media to download")
+                                .arg(docs.count()) );
+
+    QString relativeFile = fileName;
+    const QString &filePath = mDestination + "/" + relativeFile;
+
+    QDir().mkpath(mDestination);
+    const QString &existingFile = fileExists(filePath);
+    if(!existingFile.isEmpty())
+    {
+        ui->progressLabel->setText( QString("\"%1\" already downloaded.").arg(existingFile));
+        downloadDocuments(docs, offset+1);
+        return;
+    }
+
+    QFile *file = new QFile(filePath, this);
+    if(!file->open(QFile::WriteOnly))
+    {
+        delete file;
+        downloadDocuments(docs, offset+1);
+        return;
+    }
+
+    if(!mFilesTimeoutCount.contains(doc.id()))
+        mFilesTimeoutCount[doc.id()] = 0;
+
+    const int currentTry = mFilesTimeoutCount.value(doc.id());
+
+    QTimer *timer = new QTimer(this);
+    timer->setInterval(60000);
+    timer->setSingleShot(true);
+
+    mTg->uploadGetFile(input, size, dcId, [=](TG_UPLOAD_GET_FILE_CUSTOM_CALLBACK){
+        Q_UNUSED(msgId)
+        if(!mFilesTimeoutCount.contains(doc.id()) ||
+            mFilesTimeoutCount.value(doc.id()) != currentTry)
+            return;
+        if(!error.null) {
+            mFilesTimeoutCount.remove(doc.id());
+            QTimer::singleShot(50, this, [=](){
+                downloadDocuments(docs, offset+1);
+            });
+            file->close();
+            file->remove();
+            file->deleteLater();
+            timer->deleteLater();
+            return;
+        }
+
+        mTotalDownloaded += result.bytes().size();
+        ui->sizeLabel->setText( QString("%1KB downloaded").arg(mTotalDownloaded/1000) );
+
+        switch ( static_cast<qint64>(result.classType()) ) {
+        case UploadGetFile::typeUploadGetFileCanceled:
+        case UploadGetFile::typeUploadGetFileFinished: {
+            mFilesTimeoutCount.remove(doc.id());
+            file->write(result.bytes());
+            file->close();
+            file->deleteLater();
+            timer->deleteLater();
+
+            QMimeType mime = mMimeDb.mimeTypeForFile(filePath);
+            if(!mime.suffixes().isEmpty())
+            {
+                QString newName = filePath + "." + mime.suffixes().first();
+                QFile::rename(filePath, newName);
+                ui->progressLabel->setText( QString("\"%1\" downloaded successfully.")
+                                            .arg(fileName + "." + mime.suffixes().first()));
+            }
+            else
+            {
+                ui->progressLabel->setText( QString("\"%1\" downloaded successfully.")
+                                            .arg(fileName));
+            }
+
+            QTimer::singleShot(50, this, [=](){
+                downloadDocuments(docs, offset+1);
+            });
+        }
+            break;
+
+        case UploadGetFile::typeUploadGetFileProgress:
+            file->write(result.bytes());
+            timer->stop();
+            timer->start();
+            break;
+        }
+    });
+
+    connect(timer, &QTimer::timeout, this, [=](){
+        if(!mFilesTimeoutCount.contains(doc.id()))
+            return;
+        file->close();
+        file->remove();
+        delete file;
+
+        const int retriesLimit = 3;
+
+        mFilesTimeoutCount[doc.id()]++;
+        if(mFilesTimeoutCount.value(doc.id()) >= retriesLimit)
+        {
+            ui->progressLabel->setText( QString("Error: Failed to download \"%1\"").arg(fileName) );
+            mFilesTimeoutCount.remove(doc.id());
+            downloadDocuments(docs);
+        }
+        else
+        {
+            ui->progressLabel->setText( "Timed out. Try again..." );
+            downloadDocuments(docs);
+        }
+    });
+    timer->start();
+
+    ui->progressBar->setValue( 1000*offset / (offset + docs.length()));
 }
 
 QString MainWindow::fileExists(const QString &path)
