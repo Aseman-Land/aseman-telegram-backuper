@@ -203,7 +203,6 @@ void MainWindow::on_dialogBtn_clicked()
                 item->setData(Qt::UserRole+1, QVariant::fromValue<Chat>(chat));
                 item->setText(chat.title());
                 item->setIcon(QIcon(":/icons/globe.png"));
-                continue;
             }
                 break;
             case Peer::typePeerChat:
@@ -212,7 +211,6 @@ void MainWindow::on_dialogBtn_clicked()
                 item->setData(Qt::UserRole+1, QVariant::fromValue<Chat>(chat));
                 item->setText(chat.title());
                 item->setIcon(QIcon(":/icons/user-group-new.png"));
-                continue;
             }
                 break;
             case Peer::typePeerUser:
@@ -239,9 +237,17 @@ void MainWindow::on_dialogBtn_clicked()
             mUser = item->data(Qt::UserRole+2).value<User>();
 
             if(mChat.title().count())
+            {
                 ui->channelIdLine->setText( mChat.title() + ": " + QString::number(mChat.id()) );
+                ui->diaryCheck->setDisabled(true);
+                ui->diaryCheck->setChecked(false);
+            }
             else
+            {
                 ui->channelIdLine->setText( (mUser.firstName() + " " + mUser.lastName()).trimmed() + ": " + QString::number(mUser.id()) );
+                ui->diaryCheck->setEnabled(true);
+                ui->diaryCheck->setChecked(true);
+            }
 
             ui->stackedWidget->setCurrentIndex(4);
         });
@@ -533,6 +539,8 @@ void MainWindow::getChannelDetails(const QString &name)
             mChat = result.chats().first();
             ui->channelIdLine->setText( mChat.title() + ": " + QString::number(mChat.id()) );
             ui->optionsWidget->show();
+            ui->diaryCheck->setDisabled(true);
+            ui->diaryCheck->setChecked(false);
         }
         else
         if(result.users().count())
@@ -540,6 +548,8 @@ void MainWindow::getChannelDetails(const QString &name)
             mUser = result.users().first();
             ui->channelIdLine->setText( (mUser.firstName() + " " + mUser.lastName()).trimmed() + ": " + QString::number(mUser.id()) );
             ui->optionsWidget->show();
+            ui->diaryCheck->setEnabled(true);
+            ui->diaryCheck->setChecked(true);
         }
 
         ui->stackedWidget->setCurrentIndex(4);
@@ -624,6 +634,7 @@ void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint3
                 mChats[c.id()] = c;
 
             mMessages[peer.userId()? peer.userId() : peer.chatId()][indexDate][msg.id()] = msg;
+            mMessagesList << map;
 
             if(mLimit != -1)
             {
@@ -1050,6 +1061,7 @@ QVariantList MainWindow::convertToList() const
 void MainWindow::insertMonth(TGB_Peer &tgb, const Message &msg, const Message &prev) const
 {
     qint32 msgDelay = prev.id()? msg.date() - prev.date() : 0;
+    qint32 sessionDelay = (prev.id() && prev.out() != msg.out()? msg.date() - prev.date() : -1);
     QString messageText = msg.media().caption().count()? msg.media().caption() : msg.message();
 
     tgb.count += 1;
@@ -1060,6 +1072,23 @@ void MainWindow::insertMonth(TGB_Peer &tgb, const Message &msg, const Message &p
         tgb.smallDelay += msgDelay;
     else
         tgb.longDelay += msgDelay;
+
+    if (sessionDelay > -1)
+    {
+        tgb.messageSessionsCount += 1;
+        tgb.delayPerSession += sessionDelay;
+        if (sessionDelay < 60*60)
+            tgb.smallDelayPerSession += sessionDelay;
+        else
+            tgb.longDelayPerSession += sessionDelay;
+
+        tgb.maxDelayPerSession = qMax(sessionDelay, tgb.maxDelayPerSession);
+        tgb.minDelayPerSession = qMax(sessionDelay, tgb.minDelayPerSession);
+
+        tgb.avgDelayPerSession = 1.0 * tgb.delayPerSession / tgb.messageSessionsCount;
+        tgb.avgSmallDelayPerSession = 1.0 * tgb.smallDelayPerSession / tgb.messageSessionsCount;
+        tgb.avgLongDelayPerSession = 1.0 * tgb.longDelayPerSession / tgb.messageSessionsCount;
+    }
 
     if (msg.media().classType() == MessageMedia::typeMessageMediaDocument)
         for (const DocumentAttribute &attr: msg.media().document().attributes())
@@ -1117,7 +1146,6 @@ void MainWindow::insertMonth(TGB_Peer &tgb, const Message &msg, const Message &p
     }
 
     tgb.emojiMessagesCount += containsEmoji? 1 : 0;
-    tgb.messageSessionsCount += (msg.out() != prev.out()? 1 : 0);
 
     tgb.maxDelay = qMax(msgDelay, tgb.maxDelay);
     tgb.minDelay = qMin(msgDelay, tgb.minDelay);
@@ -1140,12 +1168,20 @@ void MainWindow::finish()
 {
     ui->stackedWidget->setCurrentIndex(6);
 
-    if(mMessages.count() && ui->messagesCheck->isChecked())
+    if(mMessages.count() && ui->diaryCheck->isChecked())
+    {
+        QString path = mDestination + "/diary.json";
+        QFile file(path);
+        file.open(QFile::WriteOnly);
+        file.write( QJsonDocument::fromVariant( convertToList() ).toJson() );
+        file.close();
+    }
+    if(mMessagesList.count() && ui->messagesCheck->isChecked())
     {
         QString path = mDestination + "/messages.json";
         QFile file(path);
         file.open(QFile::WriteOnly);
-        file.write( QJsonDocument::fromVariant( convertToList() ).toJson() );
+        file.write( QJsonDocument::fromVariant(mMessagesList).toJson() );
         file.close();
     }
 }

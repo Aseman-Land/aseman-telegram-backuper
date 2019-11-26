@@ -23,10 +23,13 @@ public:
     qint32 delay = 0;
     qint32 smallDelay = 0;
     qint32 longDelay = 0;
+    qint32 delayPerSession = 0;
+    qint32 smallDelayPerSession = 0;
+    qint32 longDelayPerSession = 0;
     qint32 stickers = 0;
     qint32 emojiMessagesCount = 0;
     qint32 emojisCount = 0;
-    qint32 messageSessionsCount = 0;
+    qint32 messageSessionsCount = 1;
     qint32 voiceDuration = 0;
     qint32 voiceCount = 0;
     qint32 roundDuration = 0;
@@ -36,6 +39,8 @@ public:
 
     qint32 maxDelay = 0;
     qint32 minDelay = 0;
+    qint32 maxDelayPerSession = 0;
+    qint32 minDelayPerSession = 0;
 
     qreal percentContaintsEmoji = 0;
     qreal percentRound = 0;
@@ -45,6 +50,9 @@ public:
     qreal avgDelay = 0;
     qreal avgSmallDelay = 0;
     qreal avgLongDelay = 0;
+    qreal avgDelayPerSession = 0;
+    qreal avgSmallDelayPerSession = 0;
+    qreal avgLongDelayPerSession = 0;
     qreal avgContiniusMessages = 0;
     qreal avgEmojiPerMessage = 0;
     qreal avgVoiceDuration = 0;
@@ -59,6 +67,9 @@ public:
         res["delay"] = delay;
         res["smallDelay"] = smallDelay;
         res["longDelay"] = longDelay;
+        res["delayPerSession"] = delayPerSession;
+        res["smallDelayPerSession"] = smallDelayPerSession;
+        res["longDelayPerSession"] = longDelayPerSession;
         res["stickers"] = stickers;
         res["emojisCount"] = emojisCount;
         res["emojiMessagesCount"] = emojiMessagesCount;
@@ -71,6 +82,8 @@ public:
 
         res["maxDelay"] = maxDelay;
         res["minDelay"] = minDelay;
+        res["maxDelayPerSession"] = maxDelayPerSession;
+        res["minDelayPerSession"] = minDelayPerSession;
 
         res["percentContaintsEmoji"] = percentContaintsEmoji;
         res["percentRound"] = percentRound;
@@ -80,6 +93,9 @@ public:
         res["avgDelay"] = avgDelay;
         res["avgSmallDelay"] = avgSmallDelay;
         res["avgLongDelay"] = avgLongDelay;
+        res["avgDelayPerSession"] = avgDelayPerSession;
+        res["avgSmallDelayPerSession"] = avgSmallDelayPerSession;
+        res["avgLongDelayPerSession"] = avgLongDelayPerSession;
         res["avgContiniusMessages"] = avgContiniusMessages;
         res["avgEmojiPerMessage"] = avgEmojiPerMessage;
         res["avgVoiceDuration"] = avgVoiceDuration;
@@ -207,6 +223,7 @@ private:
     QString mDestination;
     MessagesStickerSet mSticketSet;
 
+    QVariantList mMessagesList;
     QMap<qint32, QMap<QDate, QMap<qint32, Message> > > mMessages;
     QHash<qint32, User> mUsers;
     QHash<qint32, Chat> mChats;
