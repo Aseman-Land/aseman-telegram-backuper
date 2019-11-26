@@ -216,7 +216,7 @@ private:
     User mUser;
     Chat mChat;
 
-    QString mCurrentSalt;
+    QByteArray mCurrentSalt;
     qint64 mTotalDownloaded;
     qint32 mLimit;
     QHash<qint64, int> mFilesTimeoutCount;

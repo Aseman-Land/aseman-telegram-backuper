@@ -344,9 +344,7 @@ void MainWindow::on_nextBtn_clicked()
         break;
 
     case 2: // Password
-        mTg->authCheckPassword(ui->passLine->text().toUtf8(), [this](TG_AUTH_CHECK_PASSWORD_CALLBACK){
-            qDebug() << error.errorCode << error.errorText;
-        });
+        doCheckPassword(ui->passLine->text());
         break;
 
     case 3: // Channel
@@ -461,7 +459,7 @@ void MainWindow::doSendCode(const QString &code)
                 }
 
                 //As a workaround for the binary corruption of the AccountPassword we store it here as a string, thereby guaranteeing deep copy
-                mCurrentSalt = QString(result.currentSalt().toHex());
+                mCurrentSalt = result.currentSalt().toHex();
                 ui->stackedWidget->setCurrentIndex(2);
             });
         }
@@ -479,7 +477,7 @@ void MainWindow::doCheckPassword(const QString &password)
 {
     waitLabelShow();
     //Reconstructing a byte array with the current salt. A better solution could be made of course
-    const QByteArray salt = QByteArray::fromHex(mCurrentSalt.toUtf8());
+    const QByteArray salt = QByteArray::fromHex(mCurrentSalt);
     QByteArray passData = salt + password.toUtf8() + salt;
 
     //Moved hash calculation here. Either the whole hash is done here or in the lower lib. Splitting makes things hard to analyze & debug
@@ -492,6 +490,8 @@ void MainWindow::doCheckPassword(const QString &password)
             ui->stackedWidget->setCurrentIndex(2);
             return;
         }
+
+        ui->stackedWidget->setCurrentIndex(3);
     });
 }
 
@@ -598,7 +598,7 @@ void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint3
             return;
         }
 
-        if(result.messages().isEmpty() || QDateTime::fromTime_t(result.messages().last().date()).date().year() < 2019)
+        if(result.messages().isEmpty() || QDateTime::fromTime_t(result.messages().last().date()).date() < ui->minimumDate->date())
         {
             finish();
             return;
