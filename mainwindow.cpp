@@ -402,7 +402,7 @@ void MainWindow::initTelegram(const QString &phoneNumber)
     if(mTg)
         mTg->deleteLater();
 
-    mTg = new Telegram("149.154.167.50", 443, 2,  22432, "d1a8259a0c129bfab0b9756cd5d8a47f", phoneNumber,
+    mTg = new Telegram("149.154.167.50", 443, 2,  13682, "de37bcf00f4688de900510f4f87384bb", phoneNumber,
                       homePath() + "/",
                       ":/tg-server.pub");
 
@@ -614,7 +614,7 @@ void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint3
                 downloadMessages(peer, msg.id(), msg.date(), newOffset);
             });
 
-            ui->progressBar->setValue( 1000*newOffset / count );
+            if(count) ui->progressBar->setValue( 1000*newOffset / count );
         });
     });
 }
@@ -775,7 +775,8 @@ void MainWindow::downloadMedias(QList<Message> msgs, qint32 offset, qint32 count
     });
     timer->start();
 
-    ui->progressBar->setValue( 1000*(offset - msgs.length()) / count);
+    if(count)
+        ui->progressBar->setValue( 1000*(offset - msgs.length()) / count);
 }
 
 void MainWindow::downloadDocuments(QList<Document> docs, qint32 offset)

@@ -5,7 +5,7 @@
 #-------------------------------------------------
 
 QT += core gui telegram widgets network
-ios|osx: QMAKE_CXXFLAGS += -Wno-narrowing
+ios|osx|clang: QMAKE_CXXFLAGS += -Wno-narrowing
 
 TARGET = aseman-tg-backuper
 TEMPLATE = app
