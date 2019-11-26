@@ -7,5 +7,6 @@
         <file>icons/icon.png</file>
         <file>icons/user-group-new.png</file>
         <file>icons/im-user.png</file>
+        <file>files/theme</file>
     </qresource>
 </RCC>

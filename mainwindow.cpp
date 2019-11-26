@@ -16,6 +16,7 @@
 #include <QNetworkProxy>
 #include <QDesktopServices>
 #include <QSettings>
+#include <QtMath>
 
 static QString *aseman_app_home_path = 0;
 
@@ -34,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     waitLabelHide();
     initProxy();
+    initEmojis();
 }
 
 void MainWindow::initProxy()
@@ -201,6 +203,7 @@ void MainWindow::on_dialogBtn_clicked()
                 item->setData(Qt::UserRole+1, QVariant::fromValue<Chat>(chat));
                 item->setText(chat.title());
                 item->setIcon(QIcon(":/icons/globe.png"));
+                continue;
             }
                 break;
             case Peer::typePeerChat:
@@ -209,6 +212,7 @@ void MainWindow::on_dialogBtn_clicked()
                 item->setData(Qt::UserRole+1, QVariant::fromValue<Chat>(chat));
                 item->setText(chat.title());
                 item->setIcon(QIcon(":/icons/user-group-new.png"));
+                continue;
             }
                 break;
             case Peer::typePeerUser:
@@ -387,7 +391,7 @@ void MainWindow::on_downloadBtn_clicked()
     mTotalDownloaded = 0;
     mLimit = ui->limitSpin->value()? ui->limitSpin->value() : -1;
     mFilesTimeoutCount.clear();
-    mMessagesList.clear();
+    mMessages.clear();
     mDestination.clear();
     ui->sizeLabel->setText("");
 
@@ -561,14 +565,30 @@ void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint3
         }
     }
 
-    mTg->messagesGetHistory(peer, offset_id, offset_date, 0, 100, 0, 0, [this, offset, peer](TG_MESSAGES_GET_HISTORY_CALLBACK){
+    class BackupState {
+    public:
+        InputPeer peer;
+        qint32 offset_id;
+        qint32 offset_date;
+        qint32 offset;
+    };
+
+    BackupState backup;
+    backup.peer = peer;
+    backup.offset_id = offset_id;
+    backup.offset_date = offset_date;
+    backup.offset = offset;
+
+    mTg->messagesGetHistory(peer, offset_id, offset_date, 0, 100, 0, 0, [this, offset, peer, backup](TG_MESSAGES_GET_HISTORY_CALLBACK){
         if(!error.null) {
-            QMessageBox::critical(this, "Failed", error.errorText);
-            finish();
+            qDebug() << error.errorText;
+            QTimer::singleShot(5000, [this, backup](){
+                downloadMessages(backup.peer, backup.offset_id, backup.offset_date, backup.offset);
+            });
             return;
         }
 
-        if(result.messages().isEmpty())
+        if(result.messages().isEmpty() || QDateTime::fromTime_t(result.messages().last().date()).date().year() < 2019)
         {
             finish();
             return;
@@ -595,7 +615,15 @@ void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint3
                 map["user"] = (users.value(msg.fromId()).firstName() + " " + users.value(msg.fromId()).lastName()).trimmed();
             }
 
-            mMessagesList << map;
+            QDateTime msgDate = QDateTime::fromTime_t(msg.date());
+            QDate indexDate = QDate(msgDate.date().year(), qFloor((msgDate.date().month()-1)/2.0)*2 + 1, 1);
+
+            for (const User &u: result.users())
+                mUsers[u.id()] = u;
+            for (const Chat &c: result.chats())
+                mChats[c.id()] = c;
+
+            mMessages[peer.userId()? peer.userId() : peer.chatId()][indexDate][msg.id()] = msg;
 
             if(mLimit != -1)
             {
@@ -963,17 +991,190 @@ void MainWindow::waitLabelShow()
     ui->buttonsWidget->hide();
 }
 
+QVariantList MainWindow::convertToList() const
+{
+    QVariantList res;
+
+    QMapIterator<qint32, QMap<QDate, QMap<qint32, Message> > > ci(mMessages);
+    while(ci.hasNext())
+    {
+        ci.next();
+
+        qint32 peerId = ci.key();
+        QMap<QDate, QMap<qint32, Message> > months = ci.value();
+
+        Chat chat = (mChats.contains(peerId)? mChats.value(peerId) : mChat);
+        User user = (mUsers.contains(peerId)? mUsers.value(peerId) : mUser);
+
+        TGB_Chat tgbChat;
+        tgbChat.name = (user.firstName() + " " + user.lastName()).trimmed();
+        tgbChat.fromHash = QCryptographicHash::hash( QString::number(mTg->ourId()).toUtf8(), QCryptographicHash::Md5 ).toHex();
+        tgbChat.toHash = QCryptographicHash::hash( (QString::number(mTg->ourId()) + ":" + QString::number(user.id()) + ":" + QString::number(user.accessHash())).toUtf8(), QCryptographicHash::Md5 ).toHex();
+
+        QMapIterator<QDate, QMap<qint32, Message> > mi(months);
+        while (mi.hasNext())
+        {
+            mi.next();
+
+            QDate startDate = mi.key();
+            QMap<qint32, Message> messages = mi.value();
+
+            TGB_Month tgbMonth;
+
+            Message prevMsg;
+            QMapIterator<qint32, Message> msgI(messages);
+            while (msgI.hasNext())
+            {
+                msgI.next();
+
+                Message msg = msgI.value();
+                if (msg.out())
+                    insertMonth(tgbMonth.out, msg, prevMsg);
+                else
+                    insertMonth(tgbMonth.in, msg, prevMsg);
+                insertMonth(tgbMonth.sum, msg, prevMsg);
+
+                prevMsg = msg;
+            }
+
+            tgbChat.months[startDate] = tgbMonth;
+        }
+
+        res << tgbChat.toMap();
+    }
+
+
+    return res;
+}
+
+void MainWindow::insertMonth(TGB_Peer &tgb, const Message &msg, const Message &prev) const
+{
+    qint32 msgDelay = prev.id()? msg.date() - prev.date() : 0;
+    QString messageText = msg.media().caption().count()? msg.media().caption() : msg.message();
+
+    tgb.count += 1;
+    tgb.charCount += messageText.count();
+
+    tgb.delay += msgDelay;
+    if (msgDelay < 60*60)
+        tgb.smallDelay += msgDelay;
+    else
+        tgb.longDelay += msgDelay;
+
+    if (msg.media().classType() == MessageMedia::typeMessageMediaDocument)
+        for (const DocumentAttribute &attr: msg.media().document().attributes())
+        {
+            if (attr.classType() == DocumentAttribute::typeDocumentAttributeSticker)
+            {
+                tgb.stickers += 1;
+                QString alt = attr.alt();
+                for( int i=0; i<alt.size(); i++ )
+                {
+                    for( int j=5; j>=0; j-- )
+                    {
+                        QString emoji = alt.mid(i,j);
+                        if( !mEmojis.contains(emoji) )
+                            continue;
+
+                        tgb.stickerPerChar[emoji] += 1;
+                        break;
+                    }
+                }
+                break;
+            }
+            else
+            if (attr.voice())
+            {
+                tgb.voiceCount += 1;
+                tgb.voiceDuration += attr.duration();
+                break;
+            }
+            else
+            if (attr.roundMessage())
+            {
+                tgb.roundCount += 1;
+                tgb.roundDuration += attr.duration();
+                break;
+            }
+        }
+    if (msg.media().classType() == MessageMedia::typeMessageMediaPhoto)
+        tgb.imageCount += 1;
+
+    bool containsEmoji = false;
+    for( int i=0; i<messageText.size(); i++ )
+    {
+        for( int j=5; j>=0; j-- )
+        {
+            QString emoji = messageText.mid(i,j);
+            if( !mEmojis.contains(emoji) )
+                continue;
+
+            tgb.emojisCount += 1;
+            tgb.usedEmojis[emoji] += 1;
+            containsEmoji = true;
+            break;
+        }
+    }
+
+    tgb.emojiMessagesCount += containsEmoji? 1 : 0;
+    tgb.messageSessionsCount += (msg.out() != prev.out()? 1 : 0);
+
+    tgb.maxDelay = qMax(msgDelay, tgb.maxDelay);
+    tgb.minDelay = qMin(msgDelay, tgb.minDelay);
+
+    tgb.percentContaintsEmoji = 100.0 * tgb.emojiMessagesCount / tgb.count;
+    tgb.percentVoice = 100.0 * tgb.voiceCount / tgb.count;
+    tgb.percentRound = 100.0 * tgb.roundCount / tgb.count;
+
+    tgb.avgCharCount = 1.0 * tgb.charCount / tgb.count;
+    tgb.avgDelay = 1.0 * tgb.delay / tgb.count;
+    tgb.avgSmallDelay = 1.0 * tgb.smallDelay / tgb.count;
+    tgb.avgLongDelay = 1.0 * tgb.longDelay / tgb.count;
+    tgb.avgContiniusMessages = 1.0 * tgb.count / tgb.messageSessionsCount;
+    tgb.avgEmojiPerMessage = 1.0 * tgb.emojisCount / tgb.count;
+    tgb.avgVoiceDuration = 1.0 * tgb.voiceDuration / tgb.voiceCount;
+    tgb.avgRoundDuration = 1.0 * tgb.roundDuration / tgb.roundCount;
+}
+
 void MainWindow::finish()
 {
     ui->stackedWidget->setCurrentIndex(6);
 
-    if(mMessagesList.count() && ui->messagesCheck->isChecked())
+    if(mMessages.count() && ui->messagesCheck->isChecked())
     {
         QString path = mDestination + "/messages.json";
         QFile file(path);
         file.open(QFile::WriteOnly);
-        file.write( QJsonDocument::fromVariant(mMessagesList).toJson() );
+        file.write( QJsonDocument::fromVariant( convertToList() ).toJson() );
         file.close();
+    }
+}
+
+void MainWindow::initEmojis()
+{
+    if (mEmojis.count())
+        return;
+
+    QString conf = ":/files/theme";
+
+    QFile cfile(conf);
+    if ( !cfile.open(QFile::ReadOnly) )
+        return;
+
+   mEmojis.clear();
+
+    const QString data = cfile.readAll();
+    const QStringList & list = data.split("\n",QString::SkipEmptyParts);
+    for ( const QString & l: list)
+    {
+        const QStringList & parts = l.split("\t",QString::SkipEmptyParts);
+        if ( parts.count() < 2 )
+            continue;
+
+        QString epath = parts.at(0).trimmed();
+        QString ecode = parts.at(1).trimmed();
+
+        mEmojis[ecode] = epath;
     }
 }
 
