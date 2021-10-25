@@ -396,6 +396,7 @@ void MainWindow::on_downloadBtn_clicked()
     mLimit = ui->limitSpin->value()? ui->limitSpin->value() : -1;
     mFilesTimeoutCount.clear();
     mMessages.clear();
+    mMessagesList.clear();
     mDestination.clear();
     ui->sizeLabel->setText("");
 
@@ -617,6 +618,7 @@ void MainWindow::downloadMessages(const InputPeer &peer, qint32 offset_id, qint3
             map["text"] = msg.media().caption().count()? msg.media().caption() : msg.message();
             map["isMedia"] = (msg.media().classType() != MessageMedia::typeMessageMediaEmpty);
             map["id"] = msg.id();
+            map["views"] = msg.views();
             map["date"] = QDateTime::fromTime_t(msg.date());
             map["out"] = msg.out();
             if(msg.fromId())
